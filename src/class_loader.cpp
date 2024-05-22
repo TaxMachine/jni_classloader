@@ -138,7 +138,7 @@ std::vector<std::uint8_t> byte_array_output_stream_to_byte_array(JNIEnv* env, jo
                     jsize size = env->GetArrayLength(bytes);
                     auto result = std::vector<std::uint8_t>(static_cast<std::uint8_t*>(arr),
                                                             static_cast<std::uint8_t*>(arr) + size);
-                    env->ReleasePrimitiveArrayCritical(bytes, arr, 0);
+                    env->ReleasePrimitiveArrayCritical(bytes, arr, OBF(0));
                     env->DeleteLocalRef(bytes);
                     env->DeleteLocalRef(cls);
                     return result;
@@ -186,14 +186,14 @@ std::string jar_entry_get_name(JNIEnv* env, jobject jar_entry) {
 bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignore_exceptions) {
     jobject bais = byte_array_input_stream(env, jar_data);
     if (!bais) {
-        std::cerr<<"Failed to open ByteArrayInputStream\n";
+        throw std::runtime_error(OBF("Failed to open ByteArrayInputStream"));
         return false;
     }
 
     jobject jis = jar_input_stream(env, bais);
     if (!jis) {
         env->DeleteGlobalRef(bais);
-        std::cerr<<"Failed to open JarInputStream\n";
+        throw std::runtime_error(OBF("Failed to open JarInputStream"));
         return false;
     }
 
@@ -231,10 +231,12 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
             jclass cls = env->DefineClass(string_replace_all(name, OBF(".class"), OBF("")).c_str(),
                                           nullptr, reinterpret_cast<jbyte*>(bytes.data()),
                                           static_cast<jint>(bytes.size()));
-
+            std::cout << "Address of class " << name << " : " << cls << std::endl;
             if (cls) {
-                jmethodID init = env->GetMethodID(cls, OBF("<init>"), OBF("()V"));
+                jmethodID init = env->GetStaticMethodID(cls, OBF("main"), OBF("([Ljava/lang/String;)V"));
+                std::cout << "Address of method main : " << init << std::endl;
                 if (init) {
+                    std::cout << "calling main method\n";
                     env->CallStaticVoidMethod(cls, init);
                 }
                 env->DeleteLocalRef(cls);
@@ -250,6 +252,7 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
                         return false;
                     }
                 }
+                return false;
             }
         }
 
