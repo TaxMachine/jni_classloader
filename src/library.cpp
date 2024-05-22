@@ -25,7 +25,7 @@ int main() {
 
     std::vector<std::uint8_t> some_jar_as_bytes(jar, jar + sizeof(jar));
 
-    if (load_jar(jvm.env, some_jar_as_bytes, true)) {
+    if (load_jar(jvm.env, some_jar_as_bytes, false)) {
         std::cout<<"Jar loaded successfully\n";
     } else {
         std::cerr<<"Failed to load Jar\n";

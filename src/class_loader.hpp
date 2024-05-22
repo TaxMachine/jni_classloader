@@ -7,6 +7,7 @@
 
 #include <jni.h>
 #include <vector>
+#include <cstdint>
 
 struct JVM {
     JavaVM* vm;

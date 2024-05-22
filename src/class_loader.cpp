@@ -25,7 +25,7 @@ JVM create_java_vm() {
     JNIEnv* env = nullptr;
     JNI_GetDefaultJavaVMInitArgs(&jvm_args);
 
-    jvm_args.version = JNI_VERSION_19;
+    jvm_args.version = JNI_VERSION_10;
     jvm_args.nOptions = argc;
     jvm_args.options = options;
     jvm_args.ignoreUnrecognized = false;
@@ -36,154 +36,154 @@ JVM create_java_vm() {
     return {vm, env};
 }
 
-bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignore_exceptions) {
-    auto string_replace_all = [&](std::string str, const std::string& from, const std::string& to) -> std::string {
-        size_t start_pos = 0;
-        while((start_pos = str.find(from, start_pos)) != std::string::npos) {
-            str.replace(start_pos, from.length(), to);
-        }
-        return str;
-    };
+std::string string_replace_all(std::string str, const std::string& from, const std::string& to) {
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+    }
+    return str;
+};
 
-    auto byte_array_input_stream = [](JNIEnv* env, const std::vector<std::uint8_t> &buffer) -> jobject {
-        jbyteArray arr = env->NewByteArray(static_cast<jsize>(buffer.size()));
-        if (!arr) return nullptr;
-        env->SetByteArrayRegion(arr, 0, static_cast<jsize>(buffer.size()), reinterpret_cast<const jbyte*>(&buffer[0]));
-        jclass cls = env->FindClass(OBF("java/io/ByteArrayInputStream"));
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("<init>"), OBF("([B)V"));
-            if (method) {
-                jobject result = env->NewObject(cls, method, arr);
-                if (result) {
-                    env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
-                    env->DeleteLocalRef(cls);
-                    env->DeleteLocalRef(arr);
-                    return result;
-                }
-            }
-            env->DeleteLocalRef(cls);
-        }
-        env->DeleteLocalRef(arr);
-    };
-
-    auto jar_input_stream = [](JNIEnv* env, jobject input_stream) -> jobject {
-        jclass cls = env->FindClass(OBF("java/util/jar/JarInputStream"));
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("<init>"), OBF("(Ljava/io/InputStream;)V"));
-            if (method) {
-                jobject result = env->NewObject(cls, method, input_stream);
-                if (result) {
-                    env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
-                    env->DeleteLocalRef(cls);
-                    return result;
-                }
-            }
-            env->DeleteLocalRef(cls);
-        }
-        return nullptr;
-    };
-
-    auto input_stream_read = [](JNIEnv* env, jobject input_stream) -> jint {
-        jclass cls = env->GetObjectClass(input_stream);
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("read"), OBF("()I"));
-            if (method) {
-                jint result = env->CallIntMethod(input_stream, method);
+jobject byte_array_input_stream(JNIEnv* env, const std::vector<std::uint8_t> &buffer) {
+    jbyteArray arr = env->NewByteArray(static_cast<jsize>(buffer.size()));
+    if (!arr) return nullptr;
+    env->SetByteArrayRegion(arr, 0, static_cast<jsize>(buffer.size()), reinterpret_cast<const jbyte*>(&buffer[0]));
+    jclass cls = env->FindClass(OBF("java/io/ByteArrayInputStream"));
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("<init>"), OBF("([B)V"));
+        if (method) {
+            jobject result = env->NewObject(cls, method, arr);
+            if (result) {
+                env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
                 env->DeleteLocalRef(cls);
+                env->DeleteLocalRef(arr);
                 return result;
             }
-
-            env->DeleteLocalRef(cls);
         }
-        return -1;
-    };
+        env->DeleteLocalRef(cls);
+    }
+    env->DeleteLocalRef(arr);
+    return nullptr;
+};
 
-    auto byte_array_output_stream = [](JNIEnv* env) -> jobject {
-        jclass cls = env->FindClass(OBF("java/io/ByteArrayOutputStream"));
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("<init>"), OBF("()V"));
-            if (method) {
-                jobject result = env->NewObject(cls, method);
-                if (result) {
-                    env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
-                    env->DeleteLocalRef(cls);
-                    return result;
-                }
-            }
-            env->DeleteLocalRef(cls);
-        }
-        return nullptr;
-    };
-
-    auto output_stream_write = [](JNIEnv* env, jobject output_stream, jint value) {
-        jclass cls = env->GetObjectClass(output_stream);
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("write"), OBF("(I)V"));
-            if (method) {
-                env->CallVoidMethod(output_stream, method, value);
-            }
-            env->DeleteLocalRef(cls);
-        }
-    };
-
-    auto byte_array_output_stream_to_byte_array = [](JNIEnv* env, jobject output_stream) -> std::vector<std::uint8_t> {
-        jclass cls = env->GetObjectClass(output_stream);
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("toByteArray"), OBF("()[B"));
-            if (method) {
-                auto bytes = reinterpret_cast<jbyteArray>(env->CallObjectMethod(output_stream, method));
-                if (bytes) {
-                    void* arr = env->GetPrimitiveArrayCritical(bytes, nullptr);
-                    if (arr) {
-                        jsize size = env->GetArrayLength(bytes);
-                        auto result = std::vector<std::uint8_t>(static_cast<std::uint8_t*>(arr),
-                                                                static_cast<std::uint8_t*>(arr) + size);
-                        env->ReleasePrimitiveArrayCritical(bytes, arr, 0);
-                        env->DeleteLocalRef(bytes);
-                        env->DeleteLocalRef(cls);
-                        return result;
-                    }
-                }
-            }
-            env->DeleteLocalRef(cls);
-        }
-        return {};
-    };
-
-    auto get_next_jar_entry = [](JNIEnv* env, jobject jar_input_stream) -> jobject {
-        jclass cls = env->GetObjectClass(jar_input_stream);
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("getNextJarEntry"), OBF("()Ljava/util/jar/JarEntry;"));
-            if (method) {
-                jobject result = env->CallObjectMethod(jar_input_stream, method);
+jobject jar_input_stream(JNIEnv* env, jobject input_stream) {
+    jclass cls = env->FindClass(OBF("java/util/jar/JarInputStream"));
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("<init>"), OBF("(Ljava/io/InputStream;)V"));
+        if (method) {
+            jobject result = env->NewObject(cls, method, input_stream);
+            if (result) {
                 env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
                 env->DeleteLocalRef(cls);
                 return result;
             }
-            env->DeleteLocalRef(cls);
         }
-        return nullptr;
-    };
+        env->DeleteLocalRef(cls);
+    }
+    return nullptr;
+};
 
-    auto jar_entry_get_name = [](JNIEnv* env, jobject jar_entry) -> std::string {
-        jclass cls = env->FindClass(OBF("java/util/jar/JarEntry"));
-        if (cls) {
-            jmethodID method = env->GetMethodID(cls, OBF("getName"), OBF("()Ljava/lang/String;"));
-            if (method) {
-                auto jstr = reinterpret_cast<jstring>(env->CallObjectMethod(jar_entry, method));
-                const char *name_string = env->GetStringUTFChars(jstr, 0);
-                std::string result = std::string(name_string);
-                env->ReleaseStringUTFChars(jstr, name_string);
-                env->DeleteLocalRef(jstr);
+jint input_stream_read(JNIEnv* env, jobject input_stream) {
+    jclass cls = env->GetObjectClass(input_stream);
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("read"), OBF("()I"));
+        if (method) {
+            jint result = env->CallIntMethod(input_stream, method);
+            env->DeleteLocalRef(cls);
+            return result;
+        }
+
+        env->DeleteLocalRef(cls);
+    }
+    return -1;
+};
+
+jobject byte_array_output_stream(JNIEnv* env) {
+    jclass cls = env->FindClass(OBF("java/io/ByteArrayOutputStream"));
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("<init>"), OBF("()V"));
+        if (method) {
+            jobject result = env->NewObject(cls, method);
+            if (result) {
+                env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
                 env->DeleteLocalRef(cls);
                 return result;
             }
-            env->DeleteLocalRef(cls);
         }
-        return {};
-    };
+        env->DeleteLocalRef(cls);
+    }
+    return nullptr;
+};
 
-    // Load the Jar
+void output_stream_write(JNIEnv* env, jobject output_stream, jint value) {
+    jclass cls = env->GetObjectClass(output_stream);
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("write"), OBF("(I)V"));
+        if (method) {
+            env->CallVoidMethod(output_stream, method, value);
+        }
+        env->DeleteLocalRef(cls);
+    }
+};
+
+std::vector<std::uint8_t> byte_array_output_stream_to_byte_array(JNIEnv* env, jobject output_stream) {
+    jclass cls = env->GetObjectClass(output_stream);
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("toByteArray"), OBF("()[B"));
+        if (method) {
+            auto bytes = reinterpret_cast<jbyteArray>(env->CallObjectMethod(output_stream, method));
+            if (bytes) {
+                void* arr = env->GetPrimitiveArrayCritical(bytes, nullptr);
+                if (arr) {
+                    jsize size = env->GetArrayLength(bytes);
+                    auto result = std::vector<std::uint8_t>(static_cast<std::uint8_t*>(arr),
+                                                            static_cast<std::uint8_t*>(arr) + size);
+                    env->ReleasePrimitiveArrayCritical(bytes, arr, 0);
+                    env->DeleteLocalRef(bytes);
+                    env->DeleteLocalRef(cls);
+                    return result;
+                }
+            }
+        }
+        env->DeleteLocalRef(cls);
+    }
+    return {};
+};
+
+jobject get_next_jar_entry(JNIEnv* env, jobject jar_input_stream) {
+    jclass cls = env->GetObjectClass(jar_input_stream);
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("getNextJarEntry"), OBF("()Ljava/util/jar/JarEntry;"));
+        if (method) {
+            jobject result = env->CallObjectMethod(jar_input_stream, method);
+            env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
+            env->DeleteLocalRef(cls);
+            return result;
+        }
+        env->DeleteLocalRef(cls);
+    }
+    return nullptr;
+};
+
+std::string jar_entry_get_name(JNIEnv* env, jobject jar_entry) {
+    jclass cls = env->FindClass(OBF("java/util/jar/JarEntry"));
+    if (cls) {
+        jmethodID method = env->GetMethodID(cls, OBF("getName"), OBF("()Ljava/lang/String;"));
+        if (method) {
+            auto jstr = reinterpret_cast<jstring>(env->CallObjectMethod(jar_entry, method));
+            const char *name_string = env->GetStringUTFChars(jstr, 0);
+            std::string result = std::string(name_string);
+            env->ReleaseStringUTFChars(jstr, name_string);
+            env->DeleteLocalRef(jstr);
+            env->DeleteLocalRef(cls);
+            return result;
+        }
+        env->DeleteLocalRef(cls);
+    }
+    return {};
+};
+
+bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignore_exceptions) {
     jobject bais = byte_array_input_stream(env, jar_data);
     if (!bais) {
         std::cerr<<"Failed to open ByteArrayInputStream\n";
@@ -197,13 +197,13 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
         return false;
     }
 
-    // Read the jar entries
     jobject jar_entry = nullptr;
     const std::string extension = OBF(".class");
 
-    while((jar_entry = get_next_jar_entry(env, jis))) {
+    while ((jar_entry = get_next_jar_entry(env, jis))) {
         std::string name = jar_entry_get_name(env, jar_entry);
         if ((name.length() > extension.length()) && (name.rfind(extension) == name.length() - extension.length())) {
+            std::cout << "Loading: " << name << std::endl;
             jobject baos = byte_array_output_stream(env);
             if (!baos) {
                 if (!ignore_exceptions) {
@@ -214,13 +214,15 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
                 }
             }
 
-            // Define the class
             jint value = -1;
-            while((value = input_stream_read(env, jis)) != -1) {
+            while ((value = input_stream_read(env, jis)) != -1) {
                 output_stream_write(env, baos, value);
             }
 
             std::vector<std::uint8_t> bytes = byte_array_output_stream_to_byte_array(env, baos);
+            std::cout << "Loaded: " << name << std::endl;
+            printf("Size: %zu\n", bytes.size());
+            printf("First bytes: %d %d %d %d\n", bytes[0], bytes[1], bytes[2], bytes[3]);
 
             std::string canonicalName = string_replace_all(string_replace_all(name, OBF("/"), OBF(".")),
                                                            OBF(".class"),
@@ -231,6 +233,10 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
                                           static_cast<jint>(bytes.size()));
 
             if (cls) {
+                jmethodID init = env->GetMethodID(cls, OBF("<init>"), OBF("()V"));
+                if (init) {
+                    env->CallStaticVoidMethod(cls, init);
+                }
                 env->DeleteLocalRef(cls);
             } else {
                 if (env->ExceptionCheck()) {
