@@ -23,12 +23,17 @@ int main() {
         return 0;
     }
 
-    std::vector<std::uint8_t> some_jar_as_bytes(jar, jar + sizeof(jar));
+    try {
 
-    if (load_jar(jvm.env, some_jar_as_bytes, false)) {
-        std::cout<<"Jar loaded successfully\n";
-    } else {
-        std::cerr<<"Failed to load Jar\n";
+        std::vector<std::uint8_t> some_jar_as_bytes(jar, jar + sizeof(jar));
+
+        if (load_jar(jvm.env, some_jar_as_bytes, false)) {
+            std::cout << "Jar loaded successfully\n";
+        } else {
+            std::cerr << "Failed to load Jar\n";
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Exception: " << e.what() << std::endl;
     }
 
     jvm.vm->DestroyJavaVM();

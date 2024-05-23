@@ -233,7 +233,7 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
                                           static_cast<jint>(bytes.size()));
             std::cout << "Address of class " << name << " : " << cls << std::endl;
             if (cls) {
-                jmethodID init = env->GetStaticMethodID(cls, OBF("main"), OBF("([Ljava/lang/String;)V"));
+                jmethodID init = env->GetStaticMethodID(cls, OBF("caca"), OBF("()V"));
                 std::cout << "Address of method main : " << init << std::endl;
                 if (init) {
                     std::cout << "calling main method\n";
