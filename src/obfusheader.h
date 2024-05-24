@@ -59,7 +59,7 @@ namespace meta {
         static constexpr T value = v;
         using value_type = T;
         using type = integral_constant; // using injected-class-name
-        constexpr operator value_type() const noexcept { return value; }
+        constexpr explicit operator value_type() const noexcept { return value; }
         constexpr value_type operator()() const noexcept { return value; } // since c++14
     };
     
@@ -214,11 +214,11 @@ namespace meta {
 
 namespace obf {
     
-    template <class _Ty>
-    using clean_type = typename meta::remove_const_t<meta::remove_reference_t<_Ty>>;
+    template <class Ty>
+    using clean_type = typename meta::remove_const_t<meta::remove_reference_t<Ty>>;
     
     template <typename T, T value>
-    static T ensure_threadlocal() { thread_local T v = value; return v; }
+    [[maybe_unused]] static T ensure_threadlocal() { thread_local T v = value; return v; }
     
     template <typename T, T value>
     static constexpr T ensure_constexpr() { return value; }
@@ -237,7 +237,7 @@ namespace obf {
     
     // Decryption with control flow to confuse IDA/GHIDRA
     template <class T, char key, size_t size>
-    INLINE void xord(T * data, int * stack, int * value) {
+    INLINE void xord(T * data, int * stack, const int * value) {
         #ifdef CFLOW
         for (int i = 0; i < size; i++) {
             goto l_1;
@@ -276,12 +276,12 @@ namespace obf {
     template <class T, size_t size, char key>
     class obfuscator {
     public: 
-        INLINE constexpr obfuscator(const T * data) {
+        INLINE constexpr explicit obfuscator(const T * data) {
             for (int i = 0; i <size; i++)
                 m_data[i] = data[i] ^ (key + i);
         }
         
-        INLINE constexpr obfuscator(const T data) {
+        INLINE constexpr explicit obfuscator(const T data) {
             m_data[0] = data ^ key;
         }
 
@@ -293,11 +293,11 @@ namespace obf {
             return m_data;
         }
         
-        INLINE operator T * () {
+        INLINE explicit operator T * () {
             return decrypt();
         }
         
-        INLINE operator T () {
+        INLINE explicit operator T () {
             return decrypt()[0];
         }
     
@@ -311,7 +311,7 @@ namespace obf {
     template <class T, size_t size, char key>
     class decryptor {
     public:
-        INLINE decryptor(const obfuscator<T, size, key> data) {
+        INLINE explicit decryptor(const obfuscator<T, size, key> data) {
             for (int i = 0; i <size; i++)
                 m_data[i] = data.m_data[i];
         }
@@ -324,11 +324,11 @@ namespace obf {
             return m_data;
         }
         
-        INLINE operator T * () {
+        INLINE explicit operator T * () {
             return decrypt();
         }
         
-        INLINE operator T () {
+        INLINE explicit operator T () {
             return decrypt()[0];
         }
         

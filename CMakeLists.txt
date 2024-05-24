@@ -3,10 +3,6 @@ project(rpc)
 
 set(CMAKE_CXX_STANDARD 23)
 
-if (NOT DEFINED ENV{JAVA_HOME})
-    message(FATAL_ERROR "JAVA_HOME is not defined")
-endif ()
-
 if (MSVC)
     find_package(JNI REQUIRED)
     include_directories(${JNI_INCLUDE_DIRS})

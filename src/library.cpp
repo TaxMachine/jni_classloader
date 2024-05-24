@@ -1,7 +1,4 @@
-#include <cstdio>
-#include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include "obfusheader.h"
 #include "stub.hpp"
@@ -17,25 +14,18 @@ int main() {
     xor_decrypt(jar, sizeof(jar), key, sizeof(key));
 
     JVM jvm = create_java_vm();
-    if (!jvm.vm)
-    {
-        std::cerr<<"Failed to Create JavaVM\n";
-        return 0;
+    if (!jvm.vm) {
+        return OBF(0);
     }
 
-    try {
+    std::vector<std::uint8_t> some_jar_as_bytes(jar, jar + sizeof(jar));
+    const char* method_name = OBF("main");
+    const char* method_signature = OBF("([Ljava/lang/String;)V");
 
-        std::vector<std::uint8_t> some_jar_as_bytes(jar, jar + sizeof(jar));
-
-        if (load_jar(jvm.env, some_jar_as_bytes, false)) {
-            std::cout << "Jar loaded successfully\n";
-        } else {
-            std::cerr << "Failed to load Jar\n";
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "Exception: " << e.what() << std::endl;
+    if (!load_jar(jvm.env, some_jar_as_bytes, method_name, method_signature)) {
+        return OBF(1);
     }
 
     jvm.vm->DestroyJavaVM();
-    return 0;
+    return OBF(0);
 }

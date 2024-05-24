@@ -18,7 +18,7 @@ def toCpp(var_type: str, name: str, data: List[str]) -> str:
     return f"{var_type} {name}[] = {{{', '.join(data)}}};"
 
 
-f = open("testjar.jar", "rb")
+f = open("testjni2.jar", "rb")
 jar_data = list(f.read())
 
 xor_key = generate_key(6)

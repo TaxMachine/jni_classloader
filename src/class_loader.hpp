@@ -15,6 +15,7 @@ struct JVM {
 };
 
 JVM create_java_vm();
-bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignore_exceptions = false);
+bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data,
+              const char* method_name, const char* method_signature);
 
 #endif //RPC_CLASS_LOADER_HPP

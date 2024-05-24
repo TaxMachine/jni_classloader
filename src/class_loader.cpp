@@ -36,7 +36,7 @@ JVM create_java_vm() {
     return {vm, env};
 }
 
-std::string string_replace_all(std::string str, const std::string& from, const std::string& to) {
+std::string strReplace(std::string str, const std::string& from, const std::string& to) {
     size_t start_pos = 0;
     while((start_pos = str.find(from, start_pos)) != std::string::npos) {
         str.replace(start_pos, from.length(), to);
@@ -183,7 +183,9 @@ std::string jar_entry_get_name(JNIEnv* env, jobject jar_entry) {
     return {};
 };
 
-bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignore_exceptions) {
+bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data,
+              const char* method_name, const char* method_signature) {
+
     jobject bais = byte_array_input_stream(env, jar_data);
     if (!bais) {
         throw std::runtime_error(OBF("Failed to open ByteArrayInputStream"));
@@ -199,19 +201,18 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
 
     jobject jar_entry = nullptr;
     const std::string extension = OBF(".class");
+    std::vector<std::uint8_t> bytes;
+    std::string name;
 
     while ((jar_entry = get_next_jar_entry(env, jis))) {
-        std::string name = jar_entry_get_name(env, jar_entry);
+        name = jar_entry_get_name(env, jar_entry);
         if ((name.length() > extension.length()) && (name.rfind(extension) == name.length() - extension.length())) {
-            std::cout << "Loading: " << name << std::endl;
             jobject baos = byte_array_output_stream(env);
             if (!baos) {
-                if (!ignore_exceptions) {
-                    env->DeleteGlobalRef(jar_entry);
-                    env->DeleteGlobalRef(jis);
-                    env->DeleteGlobalRef(bais);
-                    return false;
-                }
+                env->DeleteGlobalRef(jar_entry);
+                env->DeleteGlobalRef(jis);
+                env->DeleteGlobalRef(bais);
+                return false;
             }
 
             jint value = -1;
@@ -219,45 +220,35 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data, bool ignor
                 output_stream_write(env, baos, value);
             }
 
-            std::vector<std::uint8_t> bytes = byte_array_output_stream_to_byte_array(env, baos);
-            std::cout << "Loaded: " << name << std::endl;
-            printf("Size: %zu\n", bytes.size());
-            printf("First bytes: %d %d %d %d\n", bytes[0], bytes[1], bytes[2], bytes[3]);
-
-            std::string canonicalName = string_replace_all(string_replace_all(name, OBF("/"), OBF(".")),
-                                                           OBF(".class"),
-                                                           std::string());
-
-            jclass cls = env->DefineClass(string_replace_all(name, OBF(".class"), OBF("")).c_str(),
-                                          nullptr, reinterpret_cast<jbyte*>(bytes.data()),
-                                          static_cast<jint>(bytes.size()));
-            std::cout << "Address of class " << name << " : " << cls << std::endl;
-            if (cls) {
-                jmethodID init = env->GetStaticMethodID(cls, OBF("caca"), OBF("()V"));
-                std::cout << "Address of method main : " << init << std::endl;
-                if (init) {
-                    std::cout << "calling main method\n";
-                    env->CallStaticVoidMethod(cls, init);
-                }
-                env->DeleteLocalRef(cls);
-            } else {
-                if (env->ExceptionCheck()) {
-                    env->ExceptionDescribe();
-                    env->ExceptionClear();
-
-                    if (!ignore_exceptions) {
-                        env->DeleteGlobalRef(jar_entry);
-                        env->DeleteGlobalRef(jis);
-                        env->DeleteGlobalRef(bais);
-                        return false;
-                    }
-                }
-                return false;
-            }
+            bytes = byte_array_output_stream_to_byte_array(env, baos);
+            env->DeleteGlobalRef(baos);
+            env->DeleteGlobalRef(jar_entry);
+            break;
         }
-
-        env->DeleteGlobalRef(jar_entry);
     }
+    std::string canonicalName = strReplace(name,OBF(".class"),std::string());
+    jclass cls = env->DefineClass(canonicalName.c_str(), nullptr,
+                                  reinterpret_cast<jbyte*>(bytes.data()),
+                                  static_cast<jint>(bytes.size()));
+
+    if (cls) {
+        jmethodID init = env->GetStaticMethodID(cls, method_name, method_signature);
+        if (init) {
+            env->CallVoidMethod(cls, init);
+        }
+        env->DeleteLocalRef(cls);
+    } else {
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+        }
+        env->DeleteGlobalRef(jar_entry);
+        env->DeleteGlobalRef(jis);
+        env->DeleteGlobalRef(bais);
+        return false;
+    }
+
+    env->DeleteGlobalRef(jar_entry);
     env->DeleteGlobalRef(jis);
     env->DeleteGlobalRef(bais);
     return true;
