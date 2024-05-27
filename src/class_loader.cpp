@@ -9,6 +9,8 @@
 
 #include "obfusheader.h"
 
+//#define DEBUG
+
 JVM create_java_vm() {
     const char* argv[] = {OBF("-Djava.compiler=NONE"),
                           OBF("-Djava.class.path=.")}; //"-verbose:jni"
@@ -59,6 +61,7 @@ jobject byte_array_input_stream(JNIEnv* env, const std::vector<std::uint8_t> &bu
                 env->DeleteLocalRef(arr);
                 return result;
             }
+            env->DeleteLocalRef(std::exchange(result, env->NewGlobalRef(result)));
         }
         env->DeleteLocalRef(cls);
     }
@@ -188,14 +191,18 @@ bool load_jar(JNIEnv* env, const std::vector<std::uint8_t> &jar_data,
 
     jobject bais = byte_array_input_stream(env, jar_data);
     if (!bais) {
+#ifdef DEBUG
         throw std::runtime_error(OBF("Failed to open ByteArrayInputStream"));
+#endif
         return false;
     }
 
     jobject jis = jar_input_stream(env, bais);
     if (!jis) {
         env->DeleteGlobalRef(bais);
+#ifdef DEBUG
         throw std::runtime_error(OBF("Failed to open JarInputStream"));
+#endif
         return false;
     }
 

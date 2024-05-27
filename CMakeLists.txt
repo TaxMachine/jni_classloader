@@ -2,8 +2,10 @@ cmake_minimum_required(VERSION 3.28)
 project(rpc)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wconversion-null")
 
 if (MSVC)
+    # This project compiles to Linux so I don't see why you would need it for windows but here it is
     find_package(JNI REQUIRED)
     include_directories(${JNI_INCLUDE_DIRS})
 else ()
@@ -15,8 +17,8 @@ endif ()
 
 file(GLOB_RECURSE SOURCES src/**)
 
-#add_library(rpc SHARED ${SOURCES})
-add_executable(rpc ${SOURCES})
+add_library(rpc SHARED ${SOURCES})
+#add_executable(rpc ${SOURCES})
 
 target_include_directories(rpc PRIVATE ${JNI_INCLUDE_DIRS})
 

@@ -18,6 +18,15 @@ def toCpp(var_type: str, name: str, data: List[str]) -> str:
     return f"{var_type} {name}[] = {{{', '.join(data)}}};"
 
 
+def toStackString(var_name: str, data: List[str]) -> str:
+    result = f"unsigned char {var_name}[{len(data)}];\n"
+    result += f"void init_{var_name}() {{\n"
+    for i in range(len(data)):
+        result += f"    {var_name}[OBF({i})] = OBF({data[i]});\n"
+    result += "}"
+    return result
+
+
 f = open("testjni2.jar", "rb")
 jar_data = list(f.read())
 
@@ -26,3 +35,6 @@ encrypted = xor(jar_data, xor_key)
 
 print(toCpp("unsigned char", "key", encode(xor_key)))
 print(toCpp("unsigned char", "jar", encode(encrypted)))
+
+#print(toStackString("key", encode(xor_key)))
+#print(toStackString("jar", encode(encrypted)))
